@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onUnmounted, ref } from 'vue'
-import { ArrowRight, ChevronRight, Eye, EyeOff, HelpCircle, Leaf, LockKeyhole, Mail, ShieldCheck, Smartphone, Sprout, UserRound, X } from 'lucide-vue-next'
+import { ArrowRight, ChevronRight, Eye, EyeOff, HelpCircle, Leaf, LockKeyhole, Mail, Monitor, ShieldCheck, Smartphone, Sprout, Star, UserRound, X } from 'lucide-vue-next'
 import { brand } from './brand'
 
 const mode = ref('password')
@@ -14,6 +14,13 @@ const helpOpen = ref(false)
 const sent = ref(false)
 const notice = ref('')
 const errors = ref({})
+const rememberAccount = ref(false)
+if (brand.id === 'signage') {
+  try {
+    account.value = localStorage.getItem('signage-account') || ''
+    rememberAccount.value = !!account.value
+  } catch { /* Storage may be unavailable; sign-in remains usable. */ }
+}
 let timer
 const registering = computed(() => mode.value === 'register')
 const passwordMode = computed(() => mode.value !== 'code')
@@ -58,6 +65,12 @@ function submit() {
   if (!passwordMode.value && !sent.value) errors.value.secret = '请先获取演示验证码'
   else if (!passwordMode.value && code.value !== '123456') errors.value.secret = '演示验证码为 123456，请重新输入'
   if (Object.keys(errors.value).length) return
+  if (brand.id === 'signage' && !registering.value) {
+    try {
+      if (rememberAccount.value) localStorage.setItem('signage-account', account.value.trim())
+      else localStorage.removeItem('signage-account')
+    } catch { /* Remembering the account is optional. */ }
+  }
   busy.value = true
   timer = setTimeout(() => {
     busy.value = false
@@ -70,13 +83,13 @@ onUnmounted(() => clearTimeout(timer))
 </script>
 
 <template>
-  <div class="login-page" :style="{ '--brand': brand.color }">
+  <div class="login-page" :class="`theme-${brand.id}`" :style="{ '--brand': brand.color }">
     <div class="landscape" :style="{ backgroundImage: `url(${brand.image})` }" aria-hidden="true"></div>
     <div class="atmosphere" aria-hidden="true"></div>
 
     <header class="site-header">
-      <a class="brand" href="/" aria-label="AI 智慧中心首页">
-        <span class="brand-mark"><Sprout :size="25" :stroke-width="1.7" /></span>
+      <a class="brand" :href="brand.home" :aria-label="`${brand.name}首页`">
+        <span class="brand-mark"><Star v-if="brand.id === 'signage'" :size="25" :stroke-width="1.7" /><Sprout v-else :size="25" :stroke-width="1.7" /></span>
         <span class="brand-text"><strong>{{ brand.name }}</strong><span>{{ brand.subtitle }}</span></span>
       </a>
       <div class="help-wrap">
@@ -91,12 +104,14 @@ onUnmounted(() => clearTimeout(timer))
 
     <main class="main-content">
       <section class="story" aria-label="平台介绍">
-        <h1>{{ brand.title[0] }}<br />{{ brand.title[1] }}</h1>
+        <h1>{{ brand.title[0] }}<br /><span>{{ brand.title[1] }}</span></h1>
         <p>{{ brand.description }}</p>
+        <div v-if="brand.principle" class="decision-note"><ShieldCheck :size="16" /><span>{{ brand.principle }}</span></div>
+        <p v-if="brand.trace" class="trace-note">{{ brand.trace }}</p>
       </section>
 
       <section class="login-area" aria-labelledby="login-title">
-        <div class="welcome"><h2 id="login-title" tabindex="-1">{{ registering ? '注册账号' : '欢迎回来' }}</h2><p>{{ registering ? '创建您的账号，开启智慧管理。' : '从这里，开始今天的智慧管理。' }}</p></div>
+        <div class="welcome"><h2 id="login-title" tabindex="-1">{{ registering ? '注册账号' : '欢迎回来' }}</h2><p>{{ registering ? '创建您的账号，开启智慧管理。' : brand.welcome }}</p></div>
         <div v-if="!registering" class="login-tabs" aria-label="选择登录方式">
           <button type="button" :class="{ active: passwordMode }" :aria-pressed="passwordMode" :disabled="busy" @click="switchMode('password')">密码登录</button>
           <button type="button" :class="{ active: !passwordMode }" :aria-pressed="!passwordMode" :disabled="busy" @click="switchMode('code')">验证码登录</button>
@@ -129,15 +144,16 @@ onUnmounted(() => clearTimeout(timer))
             </div>
             <p v-if="errors.confirm" id="confirm-error" class="error" role="alert">{{ errors.confirm }}</p>
           </div>
-          <div v-else class="form-options"><span class="organization-note">使用您的账号登录</span><button type="button" class="text-button" @click="notice = '请联系所属组织的管理员重置密码。预览版不提供真实密码重置。'">忘记密码？</button></div>
+          <div v-else class="form-options"><label v-if="brand.id === 'signage'" class="remember-account"><input v-model="rememberAccount" type="checkbox" />记住账号</label><span v-else class="organization-note">使用您的账号登录</span><button type="button" class="text-button" @click="notice = '请联系所属组织的管理员重置密码。预览版不提供真实密码重置。'">忘记密码？</button></div>
           <button class="submit-button" type="submit" :disabled="busy" :aria-busy="busy"><span class="spinner" v-if="busy" aria-hidden="true"></span><span>{{ busy ? '正在验证' : registering ? '创建账号' : '登录工作台' }}</span><ArrowRight v-if="!busy" :size="18" /></button>
           <p v-if="notice" class="notice" role="status">{{ notice }}</p>
         </form>
         <div class="access-note"><ShieldCheck :size="16" /><span>{{ registering ? '仅供预览，不会创建真实账号' : '请妥善保管您的账号与密码' }}</span></div>
         <div class="account-switch"><span>{{ registering ? '已有账号？' : '还没有账号？' }}</span><button type="button" :disabled="busy" @click="switchScreen(registering ? 'password' : 'register')">{{ registering ? '返回登录' : '注册账号' }}<ChevronRight :size="14" /></button></div>
+        <p v-if="brand.disclaimer" class="ai-disclaimer">{{ brand.disclaimer }}</p>
       </section>
     </main>
 
-    <footer class="site-footer"><span class="footer-brand"><Leaf :size="15" />扎根土地 · 智联生长</span><span class="preview-label">界面预览 · 未连接业务系统</span><span class="footer-end">{{ brand.name }}</span></footer>
+    <footer class="site-footer"><span class="footer-brand"><Monitor v-if="brand.id === 'signage'" :size="15" /><Leaf v-else :size="15" />{{ brand.footer }}</span><span class="preview-label">界面预览 · 未连接业务系统</span><span class="footer-end">{{ brand.name }}</span></footer>
   </div>
 </template>
